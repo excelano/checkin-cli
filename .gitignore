@@ -28,3 +28,6 @@ go.work.sum
 # Local config / cached tokens (just in case)
 config.json
 token.json
+
+pick-up-here.txt
+
