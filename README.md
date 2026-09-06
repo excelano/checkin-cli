@@ -6,6 +6,8 @@ Check unread Outlook emails, Teams chats, and your next meeting from the termina
 
 blick replaces as much day-to-day Outlook and Teams usage as fits the keyboard. The aperture is deliberately narrow: it surfaces the things that need action right now — unread mail, unread chats, the meeting that's about to start — and gives you keyboard verbs to reply, mark read, compose, or join. It is not where you go to search history, organize folders, browse Teams channels, or take a call. Teams stays the place for calls and meetings, permanently.
 
+Unread mail means the Inbox folder, the same count Outlook badges. Junk Email, Deleted Items, and anything a rule filed elsewhere stay out of the queue. `search` still covers the whole mailbox so a legitimate message that landed in Junk can be found; those hits carry a `[junk]` marker, render links as text only, and refuse to save or open attachments, the same restrictions Outlook puts on that folder.
+
 Scope grows by friction, not by speculation. If something missing bites in real use it goes on the list; if it doesn't, it doesn't. The Graph API is the outer limit on what blick can do, but blick deliberately doesn't try to expose everything Graph offers.
 
 ## Install
