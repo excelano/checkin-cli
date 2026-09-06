@@ -34,6 +34,11 @@ type Email struct {
 	To             []Recipient
 	Cc             []Recipient
 	HasAttachments bool
+	// Junk is set when the message sits in the Junk Email folder. Only search
+	// results can carry it — the list views are Inbox-only by construction —
+	// and the renderers use it to mark the row, keep links inert in the body,
+	// and refuse attachment save/open.
+	Junk bool
 }
 
 // inboxEmailTop caps how many messages the inbox history view pulls in one
@@ -42,8 +47,9 @@ type Email struct {
 const inboxEmailTop = 50
 
 // messageSelect is the shared $select for the message list views — the fields
-// the dashboard and inbox rows render.
-const messageSelect = "id,subject,from,toRecipients,ccRecipients,bodyPreview,receivedDateTime,hasAttachments"
+// the dashboard and inbox rows render, plus parentFolderId so search can tell
+// a Junk Email hit from an Inbox one.
+const messageSelect = "id,subject,from,toRecipients,ccRecipients,bodyPreview,receivedDateTime,hasAttachments,parentFolderId"
 
 // inboxMessages is the Graph path for the Inbox folder alone. The list views
 // read it rather than /me/messages, which spans every folder in the mailbox:
@@ -68,7 +74,7 @@ func (g *GraphClient) UnreadEmails() ([]Email, error) {
 	if err != nil {
 		return nil, err
 	}
-	return parseEmails(data)
+	return parseEmails(data, "")
 }
 
 // EmailsSince returns Inbox messages received at or after `since`, read
@@ -86,7 +92,7 @@ func (g *GraphClient) EmailsSince(since time.Time) ([]Email, error) {
 	if err != nil {
 		return nil, err
 	}
-	return parseEmails(data)
+	return parseEmails(data, "")
 }
 
 // SearchEmails runs a Graph mailbox $search over /me/messages and returns the
@@ -104,14 +110,47 @@ func (g *GraphClient) SearchEmails(kql string) ([]Email, error) {
 		"$select": {messageSelect},
 	}
 
+	junkID, err := g.junkFolderID()
+	if err != nil {
+		return nil, err
+	}
 	data, err := g.get("/me/messages", query)
 	if err != nil {
 		return nil, err
 	}
-	return parseEmails(data)
+	return parseEmails(data, junkID)
 }
 
-func parseEmails(data []byte) ([]Email, error) {
+// junkFolderID resolves the Junk Email folder's ID, cached for the life of
+// the client. Graph exposes it under the well-known name `junkemail`; the ID
+// is stable for the mailbox, unlike message IDs, which change on move.
+// Covered by Mail.Read. A failure here is fatal to the caller on purpose: a
+// search that cannot tell junk from Inbox would render junk as normal mail.
+func (g *GraphClient) junkFolderID() (string, error) {
+	if g.junkFolder != "" {
+		return g.junkFolder, nil
+	}
+	data, err := g.get("/me/mailFolders/junkemail", url.Values{"$select": {"id"}})
+	if err != nil {
+		return "", fmt.Errorf("resolving Junk Email folder: %w", err)
+	}
+	var folder struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(data, &folder); err != nil {
+		return "", err
+	}
+	if folder.ID == "" {
+		return "", fmt.Errorf("resolving Junk Email folder: Graph returned no id")
+	}
+	g.junkFolder = folder.ID
+	return g.junkFolder, nil
+}
+
+// parseEmails decodes a Graph message list. junkFolderID, when non-empty,
+// marks messages in that folder as Junk; the Inbox-only list views pass ""
+// since nothing they return can be junk.
+func parseEmails(data []byte, junkFolderID string) ([]Email, error) {
 	var result struct {
 		Value []struct {
 			ID   string `json:"id"`
@@ -126,6 +165,7 @@ func parseEmails(data []byte) ([]Email, error) {
 			BodyPreview      string           `json:"bodyPreview"`
 			ReceivedDateTime string           `json:"receivedDateTime"`
 			HasAttachments   bool             `json:"hasAttachments"`
+			ParentFolderID   string           `json:"parentFolderId"`
 		} `json:"value"`
 	}
 
@@ -145,6 +185,7 @@ func parseEmails(data []byte) ([]Email, error) {
 			To:             toRecipients(e.ToRecipients),
 			Cc:             toRecipients(e.CcRecipients),
 			HasAttachments: e.HasAttachments,
+			Junk:           junkFolderID != "" && e.ParentFolderID == junkFolderID,
 		}
 	}
 

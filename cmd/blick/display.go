@@ -293,14 +293,18 @@ func printChatRows(chats []ChatMessage) {
 	}
 }
 
-// printEmailRows prints the numbered email lines shared by the dashboard and
-// inbox views. offset is the count of chats printed before them, so the
-// numbering continues past the chat block.
+// printEmailRows prints the numbered email lines shared by the dashboard,
+// inbox, and search views. offset is the count of chats printed before them,
+// so the numbering continues past the chat block. Junk hits (search only)
+// carry a marker so a rescued message is visibly flagged before you act on it.
 func printEmailRows(emails []Email, offset int) {
 	for i, e := range emails {
 		clip := ""
 		if e.HasAttachments {
 			clip = " 📎"
+		}
+		if e.Junk {
+			clip += " " + yellow + "[junk]" + reset
 		}
 		fmt.Printf("    %s%d.%s %s — %q%s  %s(%s · %s)%s\n",
 			cyan, offset+i+1, reset,

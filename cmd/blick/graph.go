@@ -23,6 +23,7 @@ type GraphClient struct {
 	userMail    string
 	tenantID    string
 	clientID    string
+	junkFolder  string // Junk Email folder ID, resolved lazily by junkFolderID
 }
 
 func NewGraphClient(cfg Config, tok *oauth2.Token) (*GraphClient, error) {

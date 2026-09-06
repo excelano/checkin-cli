@@ -7,13 +7,15 @@ func TestParseEmails(t *testing.T) {
 		{"id":"AAA","subject":"Lunch?","from":{"emailAddress":{"name":"Alice"}},
 		 "toRecipients":[{"emailAddress":{"name":"Bob","address":"bob@example.com"}}],
 		 "ccRecipients":[],"bodyPreview":"want to grab lunch",
-		 "receivedDateTime":"2026-07-01T14:30:00Z","hasAttachments":true},
+		 "receivedDateTime":"2026-07-01T14:30:00Z","hasAttachments":true,
+		 "parentFolderId":"INBOX"},
 		{"id":"BBB","subject":"","from":{"emailAddress":{"name":""}},
 		 "toRecipients":[],"ccRecipients":[],"bodyPreview":"",
-		 "receivedDateTime":"2026-07-01T09:00:00Z","hasAttachments":false}
+		 "receivedDateTime":"2026-07-01T09:00:00Z","hasAttachments":false,
+		 "parentFolderId":"JUNK"}
 	]}`)
 
-	emails, err := parseEmails(data)
+	emails, err := parseEmails(data, "JUNK")
 	if err != nil {
 		t.Fatalf("parseEmails: %v", err)
 	}
@@ -37,10 +39,34 @@ func TestParseEmails(t *testing.T) {
 	if emails[1].HasAttachments {
 		t.Errorf("email[1] HasAttachments = true, want false")
 	}
+	if a.Junk {
+		t.Errorf("email[0] Junk = true, want false (Inbox folder)")
+	}
+	if !emails[1].Junk {
+		t.Errorf("email[1] Junk = false, want true (Junk folder)")
+	}
+}
+
+// The Inbox-only list views pass no junk folder ID; nothing they return may
+// be flagged, even a message whose parentFolderId happens to be empty.
+func TestParseEmailsNoJunkIDNeverFlags(t *testing.T) {
+	data := []byte(`{"value":[
+		{"id":"AAA","parentFolderId":"JUNK","receivedDateTime":"2026-07-01T14:30:00Z"},
+		{"id":"BBB","receivedDateTime":"2026-07-01T14:30:00Z"}
+	]}`)
+	emails, err := parseEmails(data, "")
+	if err != nil {
+		t.Fatalf("parseEmails: %v", err)
+	}
+	for _, e := range emails {
+		if e.Junk {
+			t.Errorf("email %s Junk = true with no junk folder ID, want false", e.ID)
+		}
+	}
 }
 
 func TestParseEmailsEmpty(t *testing.T) {
-	emails, err := parseEmails([]byte(`{"value":[]}`))
+	emails, err := parseEmails([]byte(`{"value":[]}`), "")
 	if err != nil {
 		t.Fatalf("parseEmails: %v", err)
 	}
@@ -50,7 +76,7 @@ func TestParseEmailsEmpty(t *testing.T) {
 }
 
 func TestParseEmailsMalformed(t *testing.T) {
-	if _, err := parseEmails([]byte(`{not json`)); err == nil {
+	if _, err := parseEmails([]byte(`{not json`), ""); err == nil {
 		t.Error("want error on malformed JSON, got nil")
 	}
 }
