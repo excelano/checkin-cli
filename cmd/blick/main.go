@@ -534,14 +534,22 @@ func replyTo(client *GraphClient, item Item) {
 	}
 }
 
+// junkViewNotice heads the body of a Junk Email hit. Links render as text
+// only and attachments refuse to save or open, so the reader knows why.
+const junkViewNotice = "In Junk Email — links shown as text only, attachments blocked. Move it to the Inbox in Outlook to restore them."
+
 func viewItem(client *GraphClient, item Item, index int, showFull bool) {
 	switch item.Kind {
 	case "email":
 		fmt.Printf("\n  %sFrom:%s %s\n", bold, reset, item.Email.From)
 		fmt.Printf("  %sSubject:%s %s\n", bold, reset, item.Email.Subject)
-		fmt.Printf("  %sReceived:%s %s\n\n", bold, reset, item.Email.Received.Local().Format("Mon Jan 2 3:04 PM"))
+		fmt.Printf("  %sReceived:%s %s\n", bold, reset, item.Email.Received.Local().Format("Mon Jan 2 3:04 PM"))
+		if item.Email.Junk {
+			fmt.Printf("  %s%s%s\n", yellow, junkViewNotice, reset)
+		}
+		fmt.Println()
 
-		body, err := client.GetEmailBody(item.Email.ID)
+		body, err := client.GetEmailBody(item.Email.ID, item.Email.Junk)
 		if err != nil {
 			fmt.Printf("  %sError loading body: %v%s\n", red, err, reset)
 			return

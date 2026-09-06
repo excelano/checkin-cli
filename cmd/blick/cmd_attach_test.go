@@ -100,3 +100,12 @@ func TestAttachmentIsFile(t *testing.T) {
 		t.Error("itemAttachment should not be a file")
 	}
 }
+
+// A junk hit is refused before any Graph call, so a nil client is safe here:
+// reaching loadUserAttachments would panic and fail the test.
+func TestPickAttachmentRefusesJunk(t *testing.T) {
+	items := []Item{{Kind: "email", Email: &Email{ID: "J", Junk: true}}}
+	if _, _, ok := pickAttachment(nil, items, "1", "1"); ok {
+		t.Error("pickAttachment on a junk item returned ok=true, want refusal")
+	}
+}

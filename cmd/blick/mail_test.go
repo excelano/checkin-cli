@@ -279,3 +279,36 @@ func TestStripHTMLBasics(t *testing.T) {
 		})
 	}
 }
+
+// The junk-body render must surface no destinations: anchors collapse to
+// their text and SafeLinks wrappers are never unwrapped.
+func TestFlattenHTMLKeepsLinksInert(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{
+			name: "named anchor keeps text only",
+			in:   `Click <a href="https://evil.example/login">here</a> now.`,
+			want: "Click here now.",
+		},
+		{
+			name: "safelink not unwrapped, text only",
+			in:   `See <a href="https://nam12.safelinks.protection.outlook.com/?url=https%3A%2F%2Fexample.com%2Freport&amp;data=05%7Cabc">the report</a>.`,
+			want: "See the report.",
+		},
+		{
+			name: "block elements and entities still flattened",
+			in:   `<p>Dear &amp; valued</p><p>customer</p>`,
+			want: "Dear & valued\ncustomer",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := flattenHTML(c.in); got != c.want {
+				t.Errorf("flattenHTML(%q) = %q, want %q", c.in, got, c.want)
+			}
+		})
+	}
+}

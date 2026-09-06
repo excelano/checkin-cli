@@ -227,7 +227,11 @@ func withoutAddress(rs []Recipient, addr string) []Recipient {
 	return out
 }
 
-func (g *GraphClient) GetEmailBody(id string) (string, error) {
+// GetEmailBody returns the message body flattened for the terminal. junk
+// selects the inert render used for Junk Email hits: anchors collapse to
+// their text, so no destinations are surfaced and nothing is SafeLinks-
+// unwrapped — the same posture Outlook takes on that folder.
+func (g *GraphClient) GetEmailBody(id string, junk bool) (string, error) {
 	query := url.Values{
 		"$select": {"body"},
 	}
@@ -248,10 +252,13 @@ func (g *GraphClient) GetEmailBody(id string) (string, error) {
 		return "", err
 	}
 
-	if result.Body.ContentType == "html" {
-		return stripHTML(result.Body.Content), nil
+	if result.Body.ContentType != "html" {
+		return result.Body.Content, nil
 	}
-	return result.Body.Content, nil
+	if junk {
+		return flattenHTML(result.Body.Content), nil
+	}
+	return stripHTML(result.Body.Content), nil
 }
 
 func (g *GraphClient) MarkEmailRead(id string) error {
@@ -445,9 +452,16 @@ func shieldAngles(url string) string {
 	return url
 }
 
+// stripHTML flattens HTML to terminal text with link destinations preserved.
 func stripHTML(s string) string {
 	// Preserve link destinations before the tag strip removes the anchors.
-	s = rewriteAnchors(s)
+	return flattenHTML(rewriteAnchors(s))
+}
+
+// flattenHTML is the tag, entity, and whitespace pass behind stripHTML. On
+// its own it renders anchors as their visible text only, which is what the
+// junk-body path wants.
+func flattenHTML(s string) string {
 	// Replace block elements with newlines
 	for _, tag := range []string{"</p>", "</div>", "</tr>", "<br>", "<br/>", "<br />"} {
 		s = strings.ReplaceAll(s, tag, "\n")

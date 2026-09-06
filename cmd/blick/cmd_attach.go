@@ -143,13 +143,22 @@ func replAttachOpen(client *GraphClient, items []Item, args []string) {
 	}
 }
 
+// junkAttachmentNotice is why save/open refuse on a Junk Email hit. Listing
+// still works; only the paths that put bytes on disk are closed.
+const junkAttachmentNotice = "Item is in Junk Email — attachments are blocked. Move it to the Inbox in Outlook first."
+
 // pickAttachment resolves item N to an email, loads its user-facing
 // attachments, and returns the idx-th (1-based). Reports its own errors and
-// returns ok=false on any failure so callers just bail.
+// returns ok=false on any failure so callers just bail. Junk hits are refused
+// before any attachment is fetched.
 func pickAttachment(client *GraphClient, items []Item, nToken, idxToken string) (Attachment, *Email, bool) {
 	email, err := resolveAttachTarget(items, nToken)
 	if err != nil {
 		fmt.Printf("  %s%v%s\n", red, err, reset)
+		return Attachment{}, nil, false
+	}
+	if email.Junk {
+		fmt.Printf("  %s%s%s\n", yellow, junkAttachmentNotice, reset)
 		return Attachment{}, nil, false
 	}
 	idx, err := strconv.Atoi(idxToken)
