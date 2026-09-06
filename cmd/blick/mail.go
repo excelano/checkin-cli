@@ -45,6 +45,17 @@ const inboxEmailTop = 50
 // the dashboard and inbox rows render.
 const messageSelect = "id,subject,from,toRecipients,ccRecipients,bodyPreview,receivedDateTime,hasAttachments"
 
+// inboxMessages is the Graph path for the Inbox folder alone. The list views
+// read it rather than /me/messages, which spans every folder in the mailbox:
+// Junk Email, Deleted Items, Archive, and anything an inbox rule filed away.
+// Unread mail in those folders is not an action-now item — Outlook's badge
+// and the iOS app both count the Inbox only — and Junk in particular must not
+// reach the body renderer, which extracts links and unwraps SafeLinks. Search
+// deliberately stays on /me/messages (see SearchEmails).
+const inboxMessages = "/me/mailFolders/inbox/messages"
+
+// UnreadEmails returns the unread Inbox messages, newest first — the email
+// half of the dashboard.
 func (g *GraphClient) UnreadEmails() ([]Email, error) {
 	query := url.Values{
 		"$filter":  {"isRead eq false"},
@@ -53,16 +64,16 @@ func (g *GraphClient) UnreadEmails() ([]Email, error) {
 		"$select":  {messageSelect},
 	}
 
-	data, err := g.get("/me/messages", query)
+	data, err := g.get(inboxMessages, query)
 	if err != nil {
 		return nil, err
 	}
 	return parseEmails(data)
 }
 
-// EmailsSince returns messages received at or after `since`, read included,
-// newest first — the email half of the inbox history view. Capped at
-// inboxEmailTop; the caller notes when the window overflows.
+// EmailsSince returns Inbox messages received at or after `since`, read
+// included, newest first — the email half of the inbox history view. Capped
+// at inboxEmailTop; the caller notes when the window overflows.
 func (g *GraphClient) EmailsSince(since time.Time) ([]Email, error) {
 	query := url.Values{
 		"$filter":  {fmt.Sprintf("receivedDateTime ge %s", since.UTC().Format(time.RFC3339))},
@@ -71,7 +82,7 @@ func (g *GraphClient) EmailsSince(since time.Time) ([]Email, error) {
 		"$select":  {messageSelect},
 	}
 
-	data, err := g.get("/me/messages", query)
+	data, err := g.get(inboxMessages, query)
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +90,9 @@ func (g *GraphClient) EmailsSince(since time.Time) ([]Email, error) {
 }
 
 // SearchEmails runs a Graph mailbox $search over /me/messages and returns the
-// matches. Graph ranks $search by relevance and forbids $orderby alongside it,
+// matches. Unlike the list views this spans every folder on purpose: search is
+// where a legitimate message that landed in Junk gets found and rescued.
+// Graph ranks $search by relevance and forbids $orderby alongside it,
 // so results come back relevance-ordered, not by date. kql is a KQL expression
 // like `from:alice` or a free-text term; it's wrapped in the double quotes
 // $search requires. Capped at searchEmailTop; the caller notes when the cap is
